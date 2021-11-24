@@ -1,9 +1,5 @@
 /*
-  hapStak DemoProgram
-  version 0.1
-  
-  Copyright (C) 2021 Foster Electric Co., Ltd.
-
+  modified hapStak DemoProgram
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -134,6 +130,7 @@ void setup()
   SPIFFS.begin();
 
   #if FLG_WRITE_FILES
+  waitButtonPush();
   WriteFiles();
   #endif
 
@@ -322,22 +319,6 @@ const uint8_t digitData[16][25] = {
   { 1,1,1,1,0, 1,0,0,0,0, 1,1,1,0,0, 1,0,0,0,0, 1,0,0,0,0, },  // "F"
 };
 
-
-// void DisplayNumber(int num, uint8_t* color) {  
-//   uint8_t buf[2+25*3];
-
-//   buf[0] = 5;
-//   buf[1] = 5;
-
-//   for (int i = 0; i < 25; i ++) {
-//     for (int j = 0; j < 3; j ++) {
-//       buf[2+i*3+j] = (digitData[num][i] == 0) ? 0x00 : color[j];
-//     }
-//   }
-
-//   M5.dis.displaybuff(buf, 0, 0);
-// }
-
 void DisplayNumber(int num, uint8_t* color) {  
   for (int i = 0; i < 25; i ++) {
     M5.dis.drawpix(i,(digitData[num][i] == 0) ? 0x00 : *(int32_t *)color);
@@ -350,21 +331,6 @@ void DisplayState() {
   if (!wav) { return; }
   M5.dis.drawpix(24, wav->isRunning() ? 0xFFFFFF : 0x000000);
 }
-
-// void FillDisplay(uint32_t grb) {
-//   uint8_t buf[2+25*3];
-
-//   buf[0] = 5;
-//   buf[1] = 5;
-
-//   for (int i = 0; i < 25; i ++) {
-//     buf[2+i*3+0] = (grb & 0xFF00) >> 8;
-//     buf[2+i*3+1] = (grb & 0xFF0000) >> 16;
-//     buf[2+i*3+2] = grb & 0xFF;
-//   }
-
-//   M5.dis.displaybuff(buf, 0, 0);
-// }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -387,7 +353,7 @@ void AccelLoop()
   
   float accTotal = sqrt(accX * accX + accY * accY + accZ * accZ);
 
-  if ((currentData.triggerMode == TRIG_SWING) && (accTotal > ACCEL_THRESHOLD)) {
+  if ((currentData.triggerMode == TRIG_SWING) && (accTotal > ACCEL_THRESHOLD) && !(wav->isRunning())) {
     LoadTrack();
     Play();
   }
@@ -577,9 +543,8 @@ bool WriteFile(char* fileName, const unsigned char* wavePtr, int waveSize)
 
 void WriteFiles()
 {  
-  // FillDisplay(0xFFFFFF);
   M5.dis.fillpix(0xFFFFFF);
-  delay(30000);
+  delay(20);//LED更新の安定待ち
   
   Serial.println("SPIFFS file write");
 
@@ -587,8 +552,7 @@ void WriteFiles()
   SPIFFS.format();
   Serial.println("SPIFFS format end");
 
-  // FillDisplay(0x000000);
-  M5.dis.fillpix(0xFFFFFF);
+  M5.dis.fillpix(0x000000);
 
   int i;
   bool result;
@@ -604,6 +568,18 @@ void WriteFiles()
   M5.dis.drawpix(i, result ? 0xFF0000 : 0x00FF00);
 
   // delay(5000);
+}
+
+void waitButtonPush(){
+  Serial.println("Waiting button push");
+  M5.dis.fillpix(0x00FF00);
+  while(1){
+    M5.update();
+    if(M5.Btn.wasPressed()){
+      break;
+    }
+    delay(20);
+  }
 }
 
 #endif
