@@ -46,7 +46,7 @@ const int FADEOUT_STEP = int(250 / LOOP_DELAY); // フェードアウトのス�
 
 const long LONG_COUNT = int(300 / LOOP_DELAY);  // 長押しの反応時間
 const long LONG_LONG_COUNT = int(900 / LOOP_DELAY); // 超長押しの反応時間
-const long MULTI_COUNT = int(50 / LOOP_DELAY);  // ダブル・トリプルクリックの反応時間
+const long MULTI_COUNT = int(100 / LOOP_DELAY);  // ダブル・トリプルクリックの反応時間
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -55,7 +55,7 @@ typedef struct {
   int fileNumber;
   int triggerMode;
   float gain;
-  uint8_t dispColor[3];
+  CRGB dispColor;
 } TrackData;
 
 const int TRIG_LOOP = 0;
@@ -67,17 +67,24 @@ const int TRIG_SWING = 2;
 #define COLOR_RED { 0xFF, 0x00, 0x00 }
 #define COLOR_GREEN { 0x00, 0xFF, 0x00 }
 #define COLOR_BLUE { 0x00, 0x00, 0xFF }
+#define COLOR_YELLOW { 0xFF, 0xFF, 0x00 }
+#define COLOR_CYAN { 0x00, 0xFF, 0xFF }
+#define COLOR_MAGENTA { 0xFF, 0x00, 0xFF }
 
 const int BUTTON_FIRST = 0;
-const int ACCEL_FIRST = 3;
-const int LOOP_FIRST = 8;
+const int ACCEL_FIRST = 4;
+const int LOOP_FIRST = 9;
+const int PL_FIRST = 14;
 
 
 const int TRACK_COUNT = 14; // 振動再生モード（トラック）の数
+const int PL_TRACK_COUNT = 2; // 牽引力錯覚(PullingIllusion)モードのトラック数
+const int TOTAL_TRACK_COUNT = TRACK_COUNT + PL_TRACK_COUNT; // 振動再生モード（トラック）の総数
+// const int TRACK_COUNT = 2; // 振動再生モード（トラック）の数
 
 // トラックデータ
 // LED表示の番号(0～F), 振動波形ファイルの番号, 駆動モードの種類, 再生ゲイン, LED表示色
-TrackData trackData[TRACK_COUNT] = {
+TrackData trackData[TOTAL_TRACK_COUNT] = {
   // One Shot
   { 0x1, 7, TRIG_BUTTON, DEFAULT_GAIN, COLOR_RED }, // BUTTON_FIRST
   { 0x2, 8, TRIG_BUTTON, DEFAULT_GAIN, COLOR_RED }, 
@@ -95,7 +102,17 @@ TrackData trackData[TRACK_COUNT] = {
   { 0xC, 4, TRIG_LOOP, DEFAULT_GAIN, COLOR_BLUE },
   { 0xD, 5, TRIG_LOOP, DEFAULT_GAIN, COLOR_BLUE },
   { 0xE, 6, TRIG_LOOP, DEFAULT_GAIN, COLOR_BLUE },
+
+  // Pulling Illusion
+  { 0x10, 17, TRIG_LOOP, DEFAULT_GAIN, COLOR_YELLOW },
+  { 0x11, 18, TRIG_LOOP, DEFAULT_GAIN, COLOR_YELLOW },
 };
+
+enum VIBRATION_MODE{
+  NORMAL,
+  PULLING_ILLUSION
+};
+VIBRATION_MODE vibrationMode=NORMAL;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -175,7 +192,6 @@ void setup()
     isIMUInit = true;
   }
   
-  // FillDisplay(0xFFFFFF);
   M5.dis.fillpix(0xFFFFFF);
   
   LoadFile(BOOT_NAME, BEEP_GAIN, false);
@@ -188,10 +204,18 @@ void setup()
 
 void loop()
 {
-  AudioLoop();
-  ButtonLoop();
-  AccelLoop();
-  DisplayLoop();
+  if(vibrationMode==NORMAL){
+    //通常のサンプルデモの動作
+    AudioLoop();
+    ButtonLoop();
+    AccelLoop();
+    DisplayLoop();
+  }else if(vibrationMode==PULLING_ILLUSION){
+    //牽引力錯覚用の動作モード
+    AudioLoop();
+    ButtonLoop();
+    DisplayLoop();
+  }
   
   delay(LOOP_DELAY);
 }
@@ -265,7 +289,13 @@ void SinglePress() {
 }
 
 void DoublePress() {
-
+  if(vibrationMode==NORMAL){
+    vibrationMode=PULLING_ILLUSION;
+    SelectTrack(PL_FIRST);
+  }else if(vibrationMode==PULLING_ILLUSION){
+    vibrationMode=NORMAL;
+    SelectTrack(0);
+  }
 }
 
 void TriplePress() {
@@ -300,7 +330,7 @@ void DisplayLoop()
   DisplayState();
 }
 
-const uint8_t digitData[16][25] = {
+const uint8_t digitData[18][25] = {
   { 0,1,1,0,0, 1,0,0,1,0, 1,0,0,1,0, 1,0,0,1,0, 0,1,1,0,0, },  // "0"
   { 0,0,1,0,0, 0,1,1,0,0, 0,0,1,0,0, 0,0,1,0,0, 0,1,1,1,0, },  // "1"
   { 0,1,1,0,0, 1,0,0,1,0, 0,0,1,0,0, 0,1,0,0,0, 1,1,1,1,0, },  // "2"
@@ -317,11 +347,17 @@ const uint8_t digitData[16][25] = {
   { 1,1,1,0,0, 1,0,0,1,0, 1,0,0,1,0, 1,0,0,1,0, 1,1,1,0,0, },  // "D"
   { 1,1,1,1,0, 1,0,0,0,0, 1,1,1,0,0, 1,0,0,0,0, 1,1,1,1,0, },  // "E"
   { 1,1,1,1,0, 1,0,0,0,0, 1,1,1,0,0, 1,0,0,0,0, 1,0,0,0,0, },  // "F"
+  { 0,0,1,0,0, 0,1,0,0,0, 1,1,1,1,1, 0,1,0,0,0, 0,0,1,0,0, },  // "←(16)"
+  { 0,0,1,0,0, 0,0,0,1,0, 1,1,1,1,1, 0,0,0,1,0, 0,0,1,0,0, },  // "→(17)"
 };
 
-void DisplayNumber(int num, uint8_t* color) {  
+void DisplayNumber(int num, CRGB color) {  
   for (int i = 0; i < 25; i ++) {
-    M5.dis.drawpix(i,(digitData[num][i] == 0) ? 0x00 : *(int32_t *)color);
+    if(digitData[num][i] == 0){
+      M5.dis.drawpix(i, 0x00);
+    }else{
+      M5.dis.drawpix(i, color);
+    }
   }
 }
 
@@ -419,7 +455,18 @@ void SelectTrack(int index)
 
 void NextTrack()
 {  
-  SelectTrack((currentIndex + 1) % TRACK_COUNT);
+  currentIndex++;
+
+  if(vibrationMode==NORMAL){
+    if(currentIndex>=TRACK_COUNT){
+      currentIndex=0;
+    }
+  }else if(vibrationMode==PULLING_ILLUSION){
+    if(currentIndex>=(PL_FIRST+PL_TRACK_COUNT)){
+      currentIndex=PL_FIRST;
+    }
+  }
+  SelectTrack(currentIndex);
 }
 
 void PrevTrack()
@@ -510,11 +557,13 @@ void FadeStop()
 #include "./wav/file14.h"
 #include "./wav/file15.h"
 #include "./wav/file16.h"
+#include "./wav/file17.h"
+#include "./wav/file18.h"
 #include "./wav/boot.h"
 
-const int FILE_COUNT = 16;  // 振動ファイルの数（起動音は含めない）。
-const unsigned char* wavePtr[FILE_COUNT] = { file01, file02, file03, file04, file05, file06, file07, file08, file09, file10, file11, file12, file13, file14, file15, file16, };
-int waveSize[FILE_COUNT] = { sizeof(file01), sizeof(file02), sizeof(file03), sizeof(file04), sizeof(file05), sizeof(file06), sizeof(file07), sizeof(file08), sizeof(file09), sizeof(file10), sizeof(file11), sizeof(file12), sizeof(file13), sizeof(file14), sizeof(file15), sizeof(file16), };
+const int FILE_COUNT = 18;  // 振動ファイルの数（起動音は含めない）。
+const unsigned char* wavePtr[FILE_COUNT] = { file01, file02, file03, file04, file05, file06, file07, file08, file09, file10, file11, file12, file13, file14, file15, file16,file17,file18};
+int waveSize[FILE_COUNT] = { sizeof(file01), sizeof(file02), sizeof(file03), sizeof(file04), sizeof(file05), sizeof(file06), sizeof(file07), sizeof(file08), sizeof(file09), sizeof(file10), sizeof(file11), sizeof(file12), sizeof(file13), sizeof(file14), sizeof(file15), sizeof(file16),sizeof(file17),sizeof(file18)};
 
 bool WriteFile(char* fileName, const unsigned char* wavePtr, int waveSize)
 {
